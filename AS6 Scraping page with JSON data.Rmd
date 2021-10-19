@@ -1,0 +1,72 @@
+---
+title: "AS6 Scraping page with JSON data "
+author: "b06109022 呂紀廷"
+date: "2020/10/31"
+output:
+  html_document:
+    highlight: zenburn
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+    css: style.css
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Loading essential packages
+```{r}
+library(tidyverse)
+library(httr)
+library(jsonlite)
+options(stringsAsFactors = F)
+options(verbose = T)
+options(scipen = 999)
+```
+
+
+
+```{r}
+url1<-"https://api.cnyes.com/media/api/v1/newslist/category/headline?limit=30&startAt=1603296000&endAt=1604246399&page=1"
+res1 <- fromJSON(content(GET(url1), "text", encoding = "utf-8"))
+df1<-res1$items$data
+res1$items$last_page
+
+df1%>%glimpse()
+```
+```{r}
+
+
+lastPage<-res1$items$last_page
+
+all.df<-tibble()
+
+for (page in 1:lastPage){
+  url<-str_c("https://api.cnyes.com/media/api/v1/newslist/category/headline?limit=30&startAt=1603296000&endAt=1604246399&page=",page)
+  
+  res<-GET(url, config = add_headers("Referer" = "https://news.cnyes.com/")) %>% content("text") %>% fromJSON()
+  
+  df<-res$items$data%>%
+  select(newsId,title,content,summary)
+  
+  
+  all.df<-bind_rows(all.df,df)
+  
+  message(page,"\t",nrow(all.df))
+}
+
+
+```
+```{r}
+print(res1$items$total)
+
+nrow(unique(all.df))
+
+head(all.df,30)
+```
+
+

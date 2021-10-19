@@ -1,0 +1,117 @@
+---
+title: "AS7 Scraping ltn news"
+author: "b06109022 呂紀廷"
+date: "2020/11/14"
+output:
+  html_document:
+    theme: cerulean
+    highlight: zenburn
+    toc: yes
+    toc_float:
+      collapsed: no
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+---
+
+# loading packages
+```{r}
+library(httr)
+library(rvest)
+library(tidyverse)
+options(stringsAsFactors = F)
+options(verbose = T)
+options(scipen = 999)
+```
+
+
+
+# Loading post list with links
+```{r}
+url<-"https://search.ltn.com.tw/list?keyword=%E6%96%B0%E5%86%A0%E8%82%BA%E7%82%8E&start_time=20041201&end_time=20201115&sort=date&type=all&page=1"
+
+num_result<-url %>%
+    read_html() %>%
+    html_nodes(".mark") %>%
+    html_text()%>%str_extract("\\d+")%>%as.numeric()
+
+num_page<-num_result%/%20
+
+all_links<-c()
+
+for (page in c(1:num_page)){
+
+url<-paste0("https://search.ltn.com.tw/list?keyword=%E6%96%B0%E5%86%A0%E8%82%BA%E7%82%8E&start_time=20041201&end_time=20201115&sort=date&type=all&page=", page)
+
+link <- url %>%
+    read_html() %>%
+    html_nodes(".http") %>%
+    html_text()
+print(page)
+all_links<-c(all_links,link)
+}
+
+
+all_links[1:100]
+```
+
+
+# Using for-loop to get first 100 posts
+```{r}
+ltn_news_content<-tibble()
+
+for (link_url in all_links[1:100]){
+
+post_content <- link_url %>%
+    read_html() %>%
+    html_nodes(".text p:nth-child(1) , p~ p+ p") %>%
+    html_text()%>%str_c(collapse = "") %>%
+    str_replace_all("\n", "")
+
+
+title<- link_url %>%
+    read_html() %>%
+    html_nodes("h1") %>%
+    html_text()
+  
+current_content<-data.frame(link_url,title,post_content)
+
+ltn_news_content<-bind_rows(ltn_news_content,current_content)
+
+
+  print(nrow(ltn_news_content))
+
+
+}
+
+```
+
+```{r}
+head(ltn_news_content,30)
+
+ltn_news_content%>% write_rds('ltn_news.rds')
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

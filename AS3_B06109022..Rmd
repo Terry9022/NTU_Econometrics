@@ -1,0 +1,279 @@
+---
+title: "AS03_join_edu_data"
+author: "b06109022 呂紀廷"
+date: "10/13/2020"
+output:
+  html_document:
+    highlight: zenburn
+    number_sections: no
+    theme: cerulean
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo =TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+options(stringsAsFactors = F)
+```
+
+# Q1 Joining educational data
+- Reading educational data from the following csv file.
+
+## Reading education data
+```{r}
+df <- read_csv("~/Desktop/呂紀廷/台灣大學/大四上/資料科學與社會研究/ver2/R4CSS-master/data/opendata107Y020.csv") %>%
+    slice(-1) %>% 
+    glimpse()
+```
+
+
+## Town level educational data 
+- Original data is village-level data
+- Using `group_by()` to create town-level statistical data.
+
+```{r}
+library(stringr)
+tidy_df <- df  %>%
+  gather("key", "value", 6:ncol(.)) %>%
+  mutate(key = str_replace(key, "edu_", "")) %>%
+  mutate(key = str_replace(key, "2ys_", "")) %>%
+  mutate(key = str_replace(key, "5ys_final2y_", "")) %>%
+  mutate(key = str_replace(key, "5ys_first3y_", "")) %>%
+  mutate(key = str_replace(key, "selftaughtl_", "selftaughtl_graduated_")) %>%
+  mutate(key = str_replace(key, "illiterate_", "illiterate_ungraduated_")) %>% 
+  separate(key, c("degree", "graduated", "gender")) %>%
+  mutate(value = as.numeric(value)) %>%
+  select(-statistic_yyy) %>%
+  arrange(site_id) 
+
+tidy_df %>% head(10)
+```
+
+```{r}
+town_df <- tidy_df %>% 
+  mutate(site_id = str_replace(site_id, "鳳山一|鳳山二", "鳳山區"),
+         site_id = str_replace(site_id, "三民一|三民二", "三民區")) %>% 
+  mutate(edu_age_15up_total = as.numeric(edu_age_15up_total)) %>%
+  group_by(site_id) %>%
+  summarise(age_15up = sum(edu_age_15up_total),
+            doctorGradSum = sum(value[graduated == "graduated" & degree == "doctor"]),
+            masterGradSum = sum(value[graduated == "graduated" & degree == "master"]),
+            universityGradSum = sum(value[graduated == "graduated" & degree == "university"]),
+            womenSum = sum(value[gender == "f"])) %>%
+  ungroup() 
+
+town_df %>% head(10)
+```
+
+
+## Loading town-level age, marriage, and referendum data
+- Loading previous town-level age-marriage-referendum-data
+```{r}
+ref10 <- read_csv("/Users/terrylu/Desktop/呂紀廷/台灣大學/大四上/資料科學與社會研究/ver2/R4CSS-master/data/referendum_byTown/ref10.csv")  %>% 
+  select(county = 縣市, town = 鄉鎮市區,
+         agree = 同意票數, disagree = 不同意票數,
+         legalVote = 有效票數, illegalVote = 無效票數,
+         vote = 投票數, legalPopulation = 投票權人數) %>% 
+  mutate(site_id = str_c(county, town)) %>%
+  select(site_id, agree) %>%
+  drop_na(site_id)
+```
+
+```{r}
+referendum <- read_csv("/Users/terrylu/Desktop/呂紀廷/台灣大學/大四上/資料科學與社會研究/ver2/R4CSS-master/town_stat.csv")%>%
+  left_join(ref10, by = "site_id")
+```
+```{r}
+referendum %>%  head(10)
+```
+
+
+
+## Joining data together
+- Joining two town-leave data together 
+- data 1: new added educational data
+- data 2: previous age-marriage-referendum-data
+
+```{r}
+joint_df <- town_df %>% left_join(referendum, by = "site_id",
+                            suffix = c("_town", "_referendum"))
+joint_df %>% head(10)
+```
+
+
+## **Q1 Ans: Joined data dimension**
+- using `dim()` to display data dimension (should be 368). 
+- TAs will score Q1 according to the outcome.
+
+```{r}
+# dim(YOUR_DATA_FRAME_NAME)
+dim(joint_df)
+```
+
+
+## **Q1 Ans: glimpse()**
+- Using `glimpse()` to print out data you join below. 
+- TAs will score Q1 according to the `glimpse()` outcome.
+
+```{r}
+# glimpse(YOUR_DATA_FRAME_NAME)
+glimpse(joint_df)
+```
+
+# Q2 Open Question - Joining one more dimension
+- TASK: Collecting one more dimension from open data and join it to the above two-level data
+- e.g., economic, wealth, educational resource, ...
+
+
+## Read the file
+```{r}
+income_tax_df <- read_csv("/Users/terrylu/Desktop/呂紀廷/台灣大學/大四上/資料科學與社會研究/ver2/R4CSS-master/data/income_tax.csv")
+```
+
+## Display the data dimension of the file
+```{r}
+dim(income_tax_df)
+```
+
+## Add code chunks as you need
+```{r}
+tidy_income_tax_df<-income_tax_df%>%
+  mutate(site_id = paste(縣市,鄉鎮市區,sep = ""))%>%
+  select(site_id,average_income_tax=平均數)%>%
+  group_by(site_id)%>%
+  summarise(average_income_tax = sum(average_income_tax)) %>% 
+  ungroup()
+
+
+tidy_income_tax_df %>% head(10)
+
+```
+
+
+
+```{r}
+joint_income_tax_df <- joint_df %>% left_join(tidy_income_tax_df, by = "site_id")
+
+joint_income_tax_df  %>% head(10)
+```
+
+## **Q2 Ans: Answer following questions**
+- Data source link (the page you download the data): 
+- Describe the data source in your words: 
+
+Data source link (the page you download the data): https://data.gov.tw/dataset/103066
+
+Describe the data source in your words: 
+
+1, data source: government database 
+
+2, data description: the income tax based on different areas 
+
+3, my cleaning: I select the average income tax and join the original data.
+
+## **Q2 Ans: Dim() of joined data frame**
+
+```{r}
+# dim(YOUR_DATA_FRAME_NAME)
+dim(joint_income_tax_df )
+```
+
+
+## **Q2 Ans: glimpse() of joined data frame**
+```{r}
+# glimpse(YOUR_DATA_FRAME_NAME) 
+glimpse(joint_income_tax_df) 
+```
+
+# Q3 Open question - Linear regression
+ - Now, you have age, marriage, and education as indenpendent variables and referendum 10th agreement as the dependent variable.
+ - Go online and search how to run regression with R
+ - Report the regression result 
+
+## **Q3 Ans**
+```{r}
+
+library(stats)
+regression1 <- lm(formula = agree ~ elderSum + marriedSum + doctorGradSum + masterGradSum + universityGradSum, data = joint_income_tax_df) 
+
+
+regression1
+# code for print out regression result 
+```
+Interpreation
+
+When the citizen is older than 65, 1-year older increases his agree rate of 10th agreement by 0.20778
+
+1-increase of married couple raises the agree rate of 10th agreement by 0.58881
+
+The agree rate of referendum 10th agreement by graduated voters:
+
+doctor degree: increases 0.90128, compared to those who didn't graduate
+
+master degree: decreases 0.57866, compared to those who didn't graduate
+
+university degree: decreases 0.06061, compared to those who didn't graduate
+
+
+
+# Q4 Challenge: The median of grouped data
+- Calculating age median of grouped data
+- Reference: https://www.themathdoctors.org/finding-the-median-of-grouped-data/
+- Solve it by dplyr pkgs
+- If you can't answer the question correctly, keep your code (even wrong) to get partial scores.
+
+## **Q4 Ans: glimpse()**
+```{r}
+age <- read_csv("/Users/terrylu/Desktop/呂紀廷/台灣大學/大四上/資料科學與社會研究/ver2/R4CSS-master/data/opendata107Y030.csv") %>%
+  slice(-1) %>% 
+  mutate(vname = str_c(site_id, village)) %>%
+  select(vname, everything())  # 把vname放在最前面
+
+
+tidy_data <- age %>%
+  gather("key", "value", 6:ncol(.)) %>%  # 第6行到最後一行做婚姻狀況、性別、年齡的交成
+  mutate(key = str_replace(key, "_age", "")) %>%   # 統一key寫法（都有三個底線）
+  mutate(key = str_replace(key, "100up", "100_110")) %>%
+  mutate(key = str_replace(key, "15down", "0_15")) %>%
+  separate(key, c("married", "ageLower", "ageUpper", "gender")) %>% 
+  mutate(age = str(ageLower, ageUpper), 
+         ageLower = as.numeric(ageLower),
+         ageUpper = as.numeric(ageUpper),
+         value = as.numeric(value)) %>%
+  select(-statistic_yyy) %>%
+  group_by(vname) %>% mutate(totalPopulation = sum(value),
+                             cumSum = cumsum(value)) %>% 
+  ungroup() %>%
+  arrange(vname)
+
+# grouped median
+library(data.table)
+
+med_data <- tidy_data %>% mutate(age = str_c(ageLower, ageUpper, sep = "-"))
+setDT(med_data)
+age_order <- c("0-15", "15-19", "20-24", "25-29","30-34", "35-39", "40-44",
+               "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79",
+               "80-84", "85-89", "90-94", "95-99", "100-110")
+med_data[, age := factor(age, levels = age_order)]  # variable AGE has various levels
+med_data[, age_group := as.integer(age)]  # add different age group
+# operator: " := "
+# age := var1, meaning that add var1 to column "age"
+setkey(med_data, vname, age)
+
+library(matrixStats)
+
+med_data[, median_group := weightedMedian(x = age_group, w = value, ties = "min"), by = vname]
+med_data[, median_age := levels(age)[median_group]]
+
+med_data<-med_data %>% group_by(vname) %>% select(vname, median_age) %>% unique() %>% arrange(vname)
+
+glimpse(med_data)
+
+```
+

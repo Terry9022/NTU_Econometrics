@@ -1,0 +1,143 @@
+---
+title: "AS08 Stance Detection"
+author: "b06109022 呂紀廷"
+date: "2020/11/25"
+output:
+  html_document:
+    theme: cerulean
+    highlight: zenburn
+    toc: yes
+    toc_float:
+      collapsed: no
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Research designs simplified
+
+## Subject
+
+*Subject：政黨立場偵測*
+
+## dependent variable design
+
+*-2: 超級親藍*
+
+*-1: 輕微親藍*
+
+*0: 中間選民/無法辨識*
+
+*1: 輕微親綠*
+
+*2: 超級親綠*
+
+# Import pkgs and reading data
+
+```{r}
+library(tidyverse)
+options(stringsAsFactors = F)
+options(verbose = T)
+options(scipen = 999)
+library(stringr)
+library(tidytext) # unnest() unnest_tokens()
+library(jiebaR)
+library(lubridate)
+```
+```{r}
+news.df <- readRDS("/Users/terrylu/Desktop/呂紀廷/台灣大學/大四上/資料科學與社會研究/ver2/R4CSS-master/data/news_tornato_2019.rds")%>%
+  mutate(comment_id = row_number())%>%
+  select(comment_id,textOriginal)
+
+
+
+sample_df<-news.df%>%
+  sample_n(100)
+
+sample_df%>%write.csv("sample_df.csv",row.names = FALSE)
+```
+
+
+# Count and show labeling results
+
+```{r}
+sample_df_mark<-read_csv("sample_df_new.csv")
+sample_df_mark
+
+sample_df_mark%>%
+  count(Mark)
+```
+
+
+# Designing your features (independent variables)
+
+```{r}
+news.df.feature<-news.df%>%
+  mutate(rule1 = str_detect(textOriginal, "蔡總統|蔡英文"))%>%
+  mutate(rule2 = str_detect(textOriginal, "韓國瑜|韓市長"))%>%
+  mutate(rule3 = str_detect(textOriginal, "中華民國"))%>%
+  mutate(rule4 = str_detect(textOriginal, "台灣|臺灣"))%>%
+  mutate(rule5 = str_detect(textOriginal, "民進黨|綠營"))%>%
+  mutate(rule6 = str_detect(textOriginal, "國民黨|藍營"))%>%
+  mutate(rule7 = str_detect(textOriginal, "中國"))%>%
+  mutate(rule8 = str_detect(textOriginal, "大陸|兩岸"))%>%
+  mutate(rule9 = str_detect(textOriginal, "美國|川普"))%>%
+  mutate(rule10 = str_detect(textOriginal, "柯文哲"))
+  
+```
+
+
+```{r}
+#mentioned 蔡總統|蔡英文
+sum(news.df.feature$rule1) / nrow(news.df.feature)
+#mentioned 韓國瑜|韓市長
+sum(news.df.feature$rule2) / nrow(news.df.feature)
+#mentioned 中華民國
+sum(news.df.feature$rule3) / nrow(news.df.feature)
+#mentioned 台灣|臺灣
+sum(news.df.feature$rule4) / nrow(news.df.feature)
+#mentioned 民進黨|綠營
+sum(news.df.feature$rule5) / nrow(news.df.feature)
+#mentioned 國民黨|藍營
+sum(news.df.feature$rule6) / nrow(news.df.feature)
+#mentioned 中國
+sum(news.df.feature$rule7) / nrow(news.df.feature)
+#mentioned 大陸|兩岸
+sum(news.df.feature$rule8) / nrow(news.df.feature)
+#mentioned 美國|川普
+sum(news.df.feature$rule9) / nrow(news.df.feature)
+#mentioned 柯文哲
+sum(news.df.feature$rule10) / nrow(news.df.feature)
+```
+
+
+# Discussion
+
+#### 你設計的研究命題好不好？可能會導致後面的研究有什麼問題？
+
+我覺得我的研究命題在社會科學領域中，是很常見也很重要的經典命題，
+我覺得這樣的命題還不錯，不過有可能有人的政治政黨傾向既不是偏藍也不是偏綠。
+
+#### 你設計的dependent variable尺度有沒有設計好？你嘗試標記100則的結果是否均衡？
+
+我不確定是我剛好隨機抽樣出來的留言都比較偏親藍，我標記後100則的結果不均衡，大部分都是親藍居多，而甚至沒有超級親綠。
+
+
+#### 你設計的Features好不好，你認為如果就這麼跑回歸的話，跑得出好結果來嗎？可能會有什麼問題。
+
+我覺得我設計的Features也算是很基本，是的確可以透過是否提到這些字詞來判斷留言者的政治傾向，但因為沒有上下文之間的關係，所以其實沒有辦法很精確判斷留言者的語意和情緒，故如果就這麼跑回歸的話，我認為沒有跑得出最好結果，因為Features和我設計的dependent variable之間，以現階段來說，只有相關性，因還沒有精確的解讀語意，故沒有經濟學上的因果性，也因此根據回歸結果所做的推斷在統計上是有問題的。
+
+
+
+
+
+
+
+
+
+
+

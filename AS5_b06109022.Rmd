@@ -1,0 +1,265 @@
+---
+title: "AS5_b06109022"
+author: "b06109022 呂紀廷"
+date: "10/25/2020"
+output:
+  html_document:
+    theme: cerulean
+    highlight: zenburn
+    toc: yes
+    toc_float:
+      collapsed: no
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+---
+
+## Load and clean data
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(tidytext)	# unnest_tokens()
+library(stringr)	# str_detect(), str_replace_all()
+options(stringsAsFactors = F)
+options(verbose = T)
+options(scipen = 999)
+```
+
+```{r}
+df<-read_csv('tweets_10-17-2020.csv')
+dim(df)
+names(df)
+```
+
+# Q1.Trump當選後，是否還有類似教學範例上的差別？
+
+### 整理資料，並依據裝置來源計數
+```{r}
+df$device[1]
+count(df,device)
+
+tweets <- df %>%
+    select(id, date, text, device) %>% 
+    filter(date>as_date('2016-11-08'))%>%
+    extract(device, "source", "Twitter for (\\w+)") %>%
+    filter(source %in% c("iPhone", "Android"))
+
+count(tweets,source)
+```
+
+我是打算先類用教學範例的分析方法在這個新的資料集上，並透過比對來看這份資料集呈現的結果是否有與教學範例不同。
+先將川普當選日期 2016-11-08 以後的資料給篩選出來，透過將不同裝置分類然後計數，可以看到這份資料集 Android 和iPhone的發文次數相差很多！
+
+### 畫出發文時間
+```{r}
+tweets %>%
+    mutate(hour = hour(with_tz(date, "EST"))) %>%
+    count(source, hour) %>%
+    group_by(source) %>%
+    mutate(percent = n / sum(n)) %>%
+    ungroup() %>%
+    ggplot() + aes(hour, percent, color = source) + 
+    scale_color_manual(labels = c("Android", "iPhone"), 
+                       values = c("royalblue", "gold")) + 
+    geom_line(size = 1) + 
+    labs(x = "Hour of day (EST)") + 
+    theme_minimal()
+```
+
+一樣畫出發文時間折線圖，可以看出Android的發文時間較規律，都在上班時間早上9:00到晚上8:00發文為主，而iPhone較不固定。
+
+
+```{r}
+library(stringr)
+tweets %>%
+    filter(!str_detect(text, '^"')) %>%
+    mutate(picture = if_else(str_detect(text, "t.co"), "Picture/link", "No Picture/link")) %>%
+    count(source, picture) %>%
+    ggplot() + 
+    aes(source, n, fill = picture)  +
+    geom_col(position = "dodge") + 
+    scale_fill_manual(labels = c("Picture/link", "No pictrue/link"),
+                      values = c("royalblue", "gold"))
+```
+一樣將發文是否會附圖的圖表畫出來，可以看出Android幾乎都會附圖，與原本教學範例中，川普的發文特徵行為一樣，而iphone則有許多沒有附圖的發文。
+
+### 根據裝置來源不同，最常提到的字詞
+```{r}
+tidytext::stop_words
+
+tweet_words <- tweets %>%
+    filter(!str_detect(text, '^"')) %>%
+    mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", "")) %>%
+    # unnest_tokens(word, text) %>%
+    unnest_tokens(word, text, token = "regex", pattern = "[^A-Za-z\\d#@']") %>%
+    filter(!word %in% stop_words$word,
+           str_detect(word, "[a-z]"))
+
+tweet_words %>%
+    anti_join(stop_words) %>%
+    count(word, sort = T) %>%
+    slice(1:30) %>%
+    mutate(word = reorder(word, n)) %>%
+    ggplot() + aes(word, n) + 
+    geom_col() + 
+    coord_flip()    
+
+```
+```{r}
+word_by_source <- tweet_words %>%
+    count(word, source) %>%
+    filter(n >= 5) %>%
+    spread(source, n, fill = 0) %>%
+    ungroup()
+
+sum(word_by_source$iPhone)
+sum(word_by_source$Android)
+
+android_iphone_ratios <- word_by_source %>%
+    mutate(iPhone = (iPhone+1)/sum(iPhone+1)) %>%
+    mutate(Android = (Android+1)/sum(Android+1)) %>%
+    mutate(logratio = log2(Android / iPhone)) %>%
+    arrange(desc(logratio))
+```
+```{r}
+android_iphone_ratios %>%
+    group_by(logratio > 0) %>%
+    top_n(10, abs(logratio)) %>%
+    ungroup() %>%
+    mutate(word = reorder(word, logratio)) %>%
+    ggplot(aes(word, logratio, fill = logratio < 0)) +
+    geom_col() +
+    coord_flip() +
+    ylab("Android / iPhone log ratio") +
+    scale_fill_manual(name = "", labels = c("Android", "iPhone"),
+                      values = c("blue", "red"))
+```
+
+這張圖雖然不像教學範例的圖有那麼明顯的差異，不過還是能大約看出iphone較會發出一些官方類的詞，像是whitehouse,realdonaldtrump等等字詞。
+
+
+# Q1 conclusion
+
+
+從以上整理資料流程以及初步仿造教學範例方法，可以看出Android與iPhone的發文行為特徵還是如同範例一樣，有明顯的差異，但有發現這個新的資料集的裝置來源與教學範例的分配相差很多，於是上網搜尋資料，得出川普在當選後，有將手機換成iphone了，因此在分析判斷是幕僚發的文還是川普本人發的文時，會遇到iPhone的資料同時參雜了這兩個來源。
+
+# 2.Trump當選後，其發言和當選前有何差別
+
+於是在第二題之中，我們試圖要分析：Trump當選後，其發言和當選前有何差別？我會先嘗試找出川普手機換成iPhone的日期，然後將範例用資料又在川普當選日期 2016-11-08之前，且用Android裝置發文當作川普當選前，其本人的發言內容。
+
+而這份資料集在川普當選日期 2016-11-08之後且在川普換手機之前，且用Android裝置發文當作川普當選後，其本人的發言內容。
+
+最後，我會比較這兩個發文內容之間，有沒有什麼樣的差異，當作Trump當選前後，其發言之差別。
+
+上網搜尋後，川普大約在2017-03-31將手機更換成iPhone。
+
+### Loading data from teaching example
+```{r}
+load(url("http://varianceexplained.org/files/trump_tweets_df.rda"))
+dim(trump_tweets_df)
+names(trump_tweets_df)
+```
+
+```{r}
+trump_tweets_df$statusSource[1]
+
+tweets_before <- trump_tweets_df %>%
+    select(id, date=created, text, statusSource) %>% 
+    extract(statusSource, "source", "Twitter for (\\w+?)<") %>%
+    filter(source %in% c("Android"))%>%
+    filter(date<as_date('2016-11-08'))%>%
+    mutate(period='before')
+
+tweets_before 
+```
+當選前的發文內容
+
+```{r}
+tweets_after <- df %>%
+    select(id, date, text, device) %>% 
+    filter(date>as_date('2016-11-08'))%>%
+    extract(device, "source", "Twitter for (\\w+)") %>%
+    filter(date<as_date('2017-03-31'))%>%
+    filter(source %in% c("Android"))%>%
+    mutate(period='after')
+
+tweets_after
+```
+當選後的發文內容
+
+```{r}
+tweets_df<-rbind(tweets_before,tweets_after)
+
+tweets_df
+```
+將當選前後資料合併，以利後續視覺化
+
+### 當選前後分別最常使用的詞彙
+```{r}
+tidytext::stop_words
+
+tweet_words_df <- tweets_df %>%
+    filter(!str_detect(text, '^"')) %>%
+    mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", "")) %>%
+    # unnest_tokens(word, text) %>%
+    unnest_tokens(word, text, token = "regex", pattern = "[^A-Za-z\\d#@']") %>%
+    filter(!word %in% stop_words$word,
+           str_detect(word, "[a-z]"))
+
+tweet_words_df %>%
+    anti_join(stop_words) %>%
+    group_by(period)%>%
+    count(word, sort = T) %>%
+    slice(1:30) %>%
+    ungroup()%>%
+    mutate(word = reorder(word, n)) %>%
+    ggplot() + aes(word, n,fill=period) + 
+    geom_col() + 
+    coord_flip() +
+    facet_wrap(~period,scales = 'free_y')
+```
+
+由這張圖可以看出，當選前後分別最常使用的詞彙，在當選前很常提到選舉競爭對手以及工作，在當選後則較常提到俄國、墨西哥等詞彙。
+
+
+### 當選前後使用頻率相差最多的詞彙
+```{r}
+word_by_period_df <- tweet_words_df %>%
+    count(word, period) %>%
+    filter(n >= 5) %>%
+    spread(period, n, fill = 0) %>%
+    ungroup()
+
+sum(word_by_period_df$after)
+sum(word_by_period_df$before)
+
+word_by_period_df
+
+period_ratios <- word_by_period_df %>%
+    mutate(after_rate = (after+1)/sum(after+1)) %>%
+    mutate(before_rate = (before+1)/sum(before+1)) %>%
+    mutate(logratio = log2(before_rate/ after_rate)) %>%
+    arrange(desc(logratio))
+```
+
+```{r}
+period_ratios %>%
+    group_by(logratio > 0) %>%
+    top_n(15, abs(logratio)) %>%
+    ungroup() %>%
+    mutate(word = reorder(word, logratio)) %>%
+    ggplot(aes(word, logratio, fill = logratio < 0)) +
+    geom_col() +
+    coord_flip() +
+    ylab("before / after election log ratio") +
+    scale_fill_manual(name = "", labels = c("before", "after"),
+                      values = c("blue", "red"))
+```
+
+### Q2 conclusion
+
+由上面這張圖可以看出，當選前後使用頻率相差最多的詞彙，Trump當選後的發言和當選前差別為：
+在當選以前川普發文多半較常提到選舉競爭對手以及選舉投票。
+而在當選以後，川普發文多半較常提到與政治較相關的詞彙，例如說：華盛頓、內閣、大臣、首相、日本。
+但他也很常使用：fake, ban, hacking，代表說他在當選後，也經常在社群媒體對於議題發表看法，多半認為是虛假的或是使用駭客，禁止等字，我認為這也是一種在影響民意的方式，可能可以用「假的」反駁一些對他不利的消息，或是去禁止一些他不認同的社會議題。
